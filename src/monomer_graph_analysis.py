@@ -1,13 +1,15 @@
 #!/usr/bin/env python
-from falcon_kit import falcon, DWA
-from falcon_kit.FastaReader import FastaReader
+# from falcon_kit import falcon, DWA
+# from falcon_kit.FastaReader import FastaReader
 import sys
 import re
 import networkx as nx
 import numpy as np
 import os.path
 import argparse
+import utils
 
+import edlib
 
 class DefaultList(list):
     def __copy__(self):
@@ -111,36 +113,42 @@ stats_file = open(filename_root + "_stats.txt", 'w')
 stats_file.write(header + "\n")
 
 # Print parameters
-print "Average monomer length: ", avg_monomer_len
-print "Max head-to-tail distance: ", allowed_max_head_to_tail
-print "Shortest read length: ", len_threshold
-print "Clustering thresolds: ", identity_thresholds
+print("Average monomer length: ", avg_monomer_len)
+print("Max head-to-tail distance: ", allowed_max_head_to_tail)
+print("Shortest read length: ", len_threshold)
+print("Clustering thresolds: ", identity_thresholds)
+
 
 # IMPORT FASTA FILES #
-for r in FastaReader(pread_filename):
-    # Load all reads from the pread file seq_db.
-    # seq_db[Read_ID] = sequence
-    if len(r.sequence) < len_threshold:
-        too_short_reads_file.write(">"+r.name + "\n" + r.sequence + "\n")
-        continue
-    seq_db[r.name] = r.sequence
+# for r in FastaReader(pread_filename):
+with open(pread_filename, 'r') as hin:
+    for name, seq, qual in utils.readfq(hin):
+        # Load all reads from the pread file seq_db.
+        # seq_db[Read_ID] = sequence
+        if len(seq) < len_threshold:
+            too_short_reads_file.write(">"+name + "\n" + seq + "\n")
+            continue
+        seq_db[name] = seq
 
 # Load all monomers found in preads into monomer_db.
 # monomer_db[Read_ID] = [(start, end), sequence]
-for r in FastaReader(inferred_monomer_filename):
+with open(inferred_monomer_filename, 'r') as hin:
+    for name, seq, qual in utils.readfq(hin):
+# for r in FastaReader(inferred_monomer_filename):
     # Parse the read tag.
     # Tag Format: ReadID/RangeStart_RangeEnd/Orientation
-    rid, rng, orientation = r.name.split("/")
-    # Skip if the read doesn't have any monomers.
-    if rid not in seq_db:
-        continue
-    rng = rng.split("_")
-    rng = int(rng[0]), int(rng[1])
-    monomer_db.setdefault(rid, [])
-    monomer_db[rid].append((rng, r.sequence, orientation))
+        rid, rng, orientation = name.split("/")
+        # Skip if the read doesn't have any monomers.
+        if rid not in seq_db:
+            continue
+        rng = rng.split("_")
+        rng = int(rng[0]), int(rng[1])
+        monomer_db.setdefault(rid, [])
+        monomer_db[rid].append((rng, seq, orientation))
 
-print len(seq_db), " sequences read.",\
-    "Reads with monomers:", len(monomer_db.keys())
+print(len(seq_db), " sequences read." , "Reads with monomers:", len(monomer_db.keys()))
+
+import pdb; pdb.set_trace()
 
 # RUN OVER ALL READS THAT CONTAIN MONOMERS #
 for rid, monomers in monomer_db.items():
@@ -152,6 +160,7 @@ for rid, monomers in monomer_db.items():
         for j in range(i + 1, len(monomers)):
             t_seq = monomers[i][1]
             q_seq = monomers[j][1]
+            """
             alignment = DWA.align(q_seq, len(q_seq), t_seq, len(t_seq), 50, 1)
             aln_str1 = alignment[0].q_aln_str
             aln_str0 = alignment[0].t_aln_str
@@ -161,12 +170,16 @@ for rid, monomers in monomer_db.items():
             aln_q_e = alignment[0].aln_q_e
             aln_t_s = alignment[0].aln_t_s
             aln_t_e = alignment[0].aln_t_e
-
+            """
+            aln = edlib.align(q_seq, t_seq)
+            match_ratio = 1 - float(aln["editDistance"]) / min(len(q_seq), len(t_seq))  
             # Skip if no alignment
-            if aln_size != 0:
+            # if aln_size != 0:
+            if match_ratio >= 0.5:
                 # Store the alignment score for the monomer pair: (i, j, score)
-                aln_data.append((i, j, 1 - (1.0*aln_dist/aln_size)))
-            DWA.free_alignment(alignment)
+                # aln_data.append((i, j, 1 - (1.0*aln_dist/aln_size)))
+                aln_data.append((i, j, match_ratio))
+            # DWA.free_alignment(alignment)
 
         mono_range = monomers[i][0]
         # Add up app monomer ranges to calculate total monomer content in read

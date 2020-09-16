@@ -1,34 +1,35 @@
 #!/usr/bin/env python
-from falcon_kit.FastaReader import FastaReader
+# from falcon_kit.FastaReader import FastaReader
 import re
 import sys
 import os
 import argparse
+import utils
 
 def parseHMMout(infilename, monomer_file_name, orientation):
-  ID="NO ID"
-  outfile=open(monomer_file_name, 'w')
-  #end_monomers=open("end_monomers_" + orientation + ".zzz", 'w')
-  with open(infilename) as f:
-    for line in f:
-      l = line.strip().split()    
-      if l == []:
-        continue
-      if ">>" in line:      
-        ID = l[1]
-      else:
-        if "!" in line:
-          low = int(l[12]) - 1
-          high = int(l[13]) - 1
-          if high-low+1 >= mono_len_threshold :
-	    if low != 0 and high < len(seq_db[ID]) - 1:	
-              outfile.write(">%s/%d_%d/%s\n" % (ID,low+1,high+1,orientation))
-              outfile.write("%s\n" % seq_db[ID][low:high+1])
+    ID="NO ID"
+    outfile=open(monomer_file_name, 'w')
+    #end_monomers=open("end_monomers_" + orientation + ".zzz", 'w')
+    with open(infilename) as f:
+        for line in f:
+            l = line.strip().split()    
+            if l == []:
+                continue
+            if ">>" in line:      
+                ID = l[1]
+            else:
+                if "!" in line:
+                    low = int(l[12]) - 1
+                    high = int(l[13]) - 1
+                    if high-low+1 >= mono_len_threshold:
+                        if low != 0 and high < len(seq_db[ID]) - 1:
+                            outfile.write(">%s/%d_%d/%s\n" % (ID,low+1,high+1,orientation))
+                            outfile.write("%s\n" % seq_db[ID][low:high+1])
               #print ID,"\t",low+1,"\t",high+1,"\t",orientation
 	    #else:
   	      #end_monomers.write(">%s/%d_%d/%s\n" % (ID,low+1,high+1,orientation))
               #end_monomers.write("%s\n" % seq_db[ID][low:high+1])	
-  outfile.close()
+    outfile.close()
   #end_monomers.close()
 
 class DefaultList(list):
@@ -71,10 +72,17 @@ monomers_file=in_seq_file.replace(".fa","_inferred_monomers.fa")
 os.system("rm -f hmmoutF.tbl hmmoutF.out; hmmsearch --cpu 8 --tblout hmmoutF.tbl -o hmmoutF.out  --notextw %s %s" % (hmm_model_fwd, in_seq_file)) 
 os.system("rm -f hmmoutR.tbl hmmoutR.out; hmmsearch --cpu 8 --tblout hmmoutR.tbl -o hmmoutR.out  --notextw %s %s" % (hmm_model_rev, in_seq_file)) 
 
+import pdb; pdb.set_trace()
 seq_db = {}
-for r in FastaReader(in_seq_file):
-    seq = r.sequence
-    seq_db[r.name] = seq
+# for r in FastaReader(in_seq_file):
+
+with open(in_seq_file, 'r') as hin:
+    for name, seq, qual in utils.readfq(hin):
+
+        # seq = r.sequence
+        # seq_db[r.name] = seq
+        seq_db[name] = seq
+    
 
 parseHMMout("hmmoutF.out", "inferred_monomers_F.zzz", "F")
 parseHMMout("hmmoutR.out", "inferred_monomers_R.zzz", "R")
